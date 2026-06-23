@@ -4,7 +4,9 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "cross-env SHARE_PATH=C:/Users/Dylan/Shared nodemon --ext js,handlebars index.js"
+    "dev": "cross-env SHARE_PATH=C:/Users/Dylan/Shared nodemon --ext js,handlebars index.js",
+    "docker:build": "docker build -t file-share .",
+    "docker:push": "docker tag file-share ghcr.io/dtgreene/file-share:latest && docker push ghcr.io/dtgreene/file-share:latest"
   },
   "author": "",
   "license": "ISC",
