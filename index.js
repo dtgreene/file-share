@@ -7,15 +7,15 @@ import mimeTypes from "mime-types";
 import prettyBytes from "pretty-bytes";
 import chokidar from "chokidar";
 import { format } from "date-fns";
+import assert from "node:assert";
 
 const port = 8080;
 const host = "0.0.0.0";
 
-const sharePath = normalize(process.env.SHARE_PATH);
+assert(process.env.SHARE_PATH, "SHARE_PATH was not defined");
 
-if (!fs.existsSync(sharePath)) {
-  throw new Error("Share path does not exist!");
-}
+const sharePath = normalize(process.env.SHARE_PATH);
+assert(fs.existsSync(sharePath), "Share path does not exist");
 
 const fastify = Fastify({ logger: true });
 const stacheFile = fs.readFileSync(
@@ -29,6 +29,12 @@ await fastify.register(websocket);
 
 let currentFiles = [];
 let clients = new Set();
+let broadcastTimer = -1;
+
+function debouncedBroadcast(message) {
+  clearTimeout(broadcastTimer);
+  broadcastTimer = setTimeout(() => broadcast(message), 1000);
+}
 
 function broadcast(message) {
   for (const client of clients) {
@@ -47,13 +53,13 @@ chokidar
     const modified = format(stats.mtime, "M/d/yyyy h:mm a");
 
     currentFiles.push({ path, size, modified, fullPath });
-    broadcast("files_changed");
+    debouncedBroadcast("files_changed");
 
     fastify.log.info(`File added ${path}`);
   })
   .on("unlink", (fullPath) => {
     currentFiles = currentFiles.filter((file) => file.fullPath !== fullPath);
-    broadcast("files_changed");
+    debouncedBroadcast("files_changed");
 
     fastify.log.info("File deleted");
   });
@@ -65,6 +71,10 @@ fastify.get("/", (_, reply) => {
 fastify.get("/download/*", (request, reply) => {
   const [, file] = request.url.split("/download/");
   const filePath = resolve(sharePath, file);
+
+  if (!filePath.startsWith(sharePath)) {
+    return reply.code(403).send();
+  }
 
   if (fs.existsSync(filePath)) {
     const mType = mimeTypes.lookup(file) || "application/octet-stream";
